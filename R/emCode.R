@@ -1,10 +1,12 @@
 #' Linear Regression for Data with Heteroskedastic Heavy-Tailed Data
 #'
+#' @importFrom quantreg rq
 #' @export
-hhlm <- function(formula, varFormula, data, iterations = 20, delta = 10^-4) {
+hhlm <- function(formula, varFormula, data, iterations = 200, delta = 10^-4,
+                 tol = 10^-3) {
   # Initializing with robust regression -------
-  robustFit <- glmrob(formula, data = data, family = "gaussian")
-  residuals <- robustFit$residuals
+  initfit <- lm(formula, data = data)
+  residuals <- initfit$residuals
   varFormula <- update(varFormula, log(residuals^2) ~ .)
   data$residuals <- residuals
   lmvar <- lm(varFormula, data = data)
@@ -12,16 +14,17 @@ hhlm <- function(formula, varFormula, data, iterations = 20, delta = 10^-4) {
   estTdf <- findTdf(residuals / sqrt(estVar), rep(1, length(residuals)))
   normalProb <- 0.5 # initializing probability of non-outlier
   tProb <- 1 - normalProb
+  prevEst <- coef(initfit)
 
   # Generalized EM Algorithm
   hackConst <- 1
   for(m in 1:iterations) {
-    print(m)
-    print(c(coef = coef(lmfit)))
-    print(c(varcoef = coef(lmvar)))
-    print(c(tdf = estTdf))
-    print(c(normProb = normalProb))
-    print(c(resids = quantile(residuals)))
+    # print(m)
+    # print(c(coef = coef(lmfit)))
+    # print(c(varcoef = coef(lmvar)))
+    # print(c(tdf = estTdf))
+    # print(c(normProb = normalProb))
+    # print(c(resids = quantile(residuals)))
 
     # E Step ---------
     normDens <- dnorm(residuals, 0, sqrt(estVar), log = TRUE)
@@ -41,6 +44,11 @@ hhlm <- function(formula, varFormula, data, iterations = 20, delta = 10^-4) {
     estTdf <- findTdf(residuals / sqrt(hackConst * estVar), tPost)
     normalProb <- mean(normPost)
     tProb <- 1 - normalProb
+
+    diff <- sum(abs(prevEst - coef(lmfit)) / abs(prevEst))
+    prevEst <- coef(lmfit)
+    # print(diff)
+    if(diff < tol) break
   }
 
   # Reporting --------
@@ -50,7 +58,8 @@ hhlm <- function(formula, varFormula, data, iterations = 20, delta = 10^-4) {
                   predicted = predict(lmfit),
                   residuals = residuals,
                   outlierPosteriors = tPost,
-                  outlierProbability = tProb)
+                  outlierProbability = tProb,
+                  iterations = m)
   return(results)
 }
 
