@@ -4,7 +4,7 @@
 \alias{hhlm}
 \title{Linear Regression for Data with Heteroskedastic Heavy-Tailed Data}
 \usage{
-hhlm(formula, varFormula, data, family, iterations = 20, delta = 10^-4)
+hhlm(formula, varFormula, data, iterations = 20, delta = 10^-4)
 }
 \description{
 Linear Regression for Data with Heteroskedastic Heavy-Tailed Data

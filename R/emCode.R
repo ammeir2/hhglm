@@ -1,11 +1,12 @@
 #' Linear Regression for Data with Heteroskedastic Heavy-Tailed Data
 #'
 #' @export
-hhlm <- function(formula, varFormula, data, family, iterations = 20, delta = 10^-4) {
+hhlm <- function(formula, varFormula, data, iterations = 20, delta = 10^-4) {
   # Initializing with robust regression -------
   robustFit <- glmrob(formula, data = data, family = "gaussian")
   residuals <- robustFit$residuals
   varFormula <- update(varFormula, log(residuals^2) ~ .)
+  data$residuals <- residuals
   lmvar <- lm(varFormula, data = data)
   estVar <- exp(predict(lmvar))
   estTdf <- findTdf(residuals / sqrt(estVar), rep(1, length(residuals)))
@@ -13,28 +14,42 @@ hhlm <- function(formula, varFormula, data, family, iterations = 20, delta = 10^
   tProb <- 1 - normalProb
 
   # Generalized EM Algorithm
+  hackConst <- 1
   for(m in 1:iterations) {
+    print(m)
+    print(c(coef = coef(lmfit)))
+    print(c(varcoef = coef(lmvar)))
+    print(c(tdf = estTdf))
+    print(c(normProb = normalProb))
+    print(c(resids = quantile(residuals)))
+
     # E Step ---------
     normDens <- dnorm(residuals, 0, sqrt(estVar), log = TRUE)
-    tDens <- dt(residuals / sqrt(estVar), df = estTdf, log = TRUE)
+    tDens <- dt(residuals / sqrt(hackConst * estVar), df = estTdf, log = TRUE)
     normPost <- 1 / (1 + exp(tDens + log(tProb) - normDens - log(normalProb)))
     tPost <- 1 - normPost
 
     # M-Step --------
-    lmfit <- lm(formula, weights = normPost / (estVar + delta))
+    data$weights <- normPost / (estVar + delta)
+    lmfit <- lm(formula, weights = weights, data = data)
     residuals <- lmfit$residuals
-    lmvar <- lm(varFormula, weights = normPost / (estVar + delta))
+    data$residuals <- residuals
+    data$normPost <- normPost
+    #lmvar <- lm(varFormula, weights = normPost, data = data)
+    lmvar <- rq(varFormula, data = data)
     estVar <- exp(predict(lmvar))
-    estTdf <- findTdf(residuals / sqrt(estVar), tPost)
+    estTdf <- findTdf(residuals / sqrt(hackConst * estVar), tPost)
     normalProb <- mean(normPost)
     tProb <- 1 - normalProb
   }
 
   # Reporting --------
   results <- list(regModel = lmfit,
-                  varModel = estVar,
+                  varModel = lmvar,
                   tdf = estTdf,
+                  predicted = predict(lmfit),
                   residuals = residuals,
+                  outlierPosteriors = tPost,
                   outlierProbability = tProb)
   return(results)
 }
@@ -71,7 +86,7 @@ findLaplaceRateMLE <- function(residuals, weights) {
 # A function for etimating t degrees of freedom -----
 #' @export
 findTdf <- function(residuals, weights) {
-  llim <- 10^-3
+  llim <- 2
   ulim <- 200
   max <- optimize(f = function(r) weighted.mean(dt(residuals, r, log = TRUE), weights),
                   lower = llim, upper = ulim, maximum = TRUE)$maximum
