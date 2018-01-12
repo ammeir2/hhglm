@@ -3,5 +3,7 @@
 export(dlaplace)
 export(expit)
 export(findLaplaceRateMLE)
+export(findTdf)
+export(findVarFunction)
 export(logit)
 importFrom(robustbase,glmrob)

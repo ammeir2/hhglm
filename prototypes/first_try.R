@@ -12,31 +12,36 @@ robustFit <- glmrob(y ~ x, data = dat, family = "gaussian")
 y <- dat$y
 x <- dat$x
 residuals <- robustFit$residuals
-loessVar <- loess(log(residuals^2) ~ x)
+# loessVar <- loess(log(residuals^2) ~ x)
+lmvar <- lm(log(residuals^2) ~ abs(x) + x^2)
 plot(dat$x, sqrt(residuals^2)) # Checking that spline estimate is Reasonable
-predvar <- exp(predict(loessVar)[order(x)])
+predvar <- exp(predict(lmvar)[order(x)])
 lines(sort(x), sqrt(predvar)) # Clearly influenced by outliers
-laplaceRate <- 1 / max(abs(residuals)) # initializing from a high rate
+estTdf <- 3
 normalProb <- 0.5 # initializing probability of non-outlier
-laplaceProb <- 1 - normalProb
+tProb <- 1 - normalProb
 
 # Starting EM -------
-iterations <- 10
+iterations <- 1
 delta <- 10^-3
 for(m in 1:iterations) {
   # E Step ---------
   estVar <- exp(predict(loessVar))
   normDens <- dnorm(residuals, 0, sqrt(estVar), log = TRUE)
-  laplaceDens <- dlaplace(residuals, rate = laplaceRate, log = TRUE)
-  normPost <- 1 / (1 + exp(laplaceDens + log(laplaceProb) - normDens - log(normalProb)))
-  lapPost <- 1 - normPost
+  tDens <- dt(residuals / sqrt(estVar), df = estTdf, log = TRUE)
+  normPost <- 1 / (1 + exp(tDens + log(tProb) - normDens - log(normalProb)))
+  tPost <- 1 - normPost
 
   # M-Step --------
   lmfit <- lm(y ~ x, weights = normPost / (estVar + delta))
   residuals <- lmfit$residuals
-  loessVar <- loess(log(residuals^2) ~ x, weights = normPost)
-  laplaceRate <- findLaplaceRateMLE(residuals, lapPost)
-  normalProb <- expit(predict(loess(logit(pmax(normPost, delta)) ~ x)))
+  # loessVar <- loess(log(residuals^2) ~ abs(x), weights = normPost)
+  # estVar <- exp(predict(loessVar))
+  loessVar <- lm(log(residuals^2) ~ abs(x) + x^2, weights = normPost / (estVar + delta))
+  findVarFunction(x, residuals, estTdf, normPost)
+  estVar <- exp(predict(loessVar))
+  estTdf <- findTdf(residuals / sqrt(estVar), tPost)
+  normalProb <- mean(normPost)
   laplaceProb <- 1 - normalProb
 }
 
@@ -47,7 +52,7 @@ resultDat <- data.frame(x = x, y = y,
                         residsq = residuals^2, estVar = estVar,
                         normPost = normPost, weights = weights)
 resultDat <- resultDat[order(resultDat$x), ]
-ggplot(resultDat) + geom_point(aes(x = x, y = y, col = weights)) +
+ggplot(resultDat) + geom_point(aes(x = x, y = y, col = normPost)) +
   geom_abline(intercept = lmfit$coefficients[1], slope = lmfit$coefficients[2])
 
 ggplot(resultDat) + geom_point(aes(x = x, y = sqrt(residsq), col = normPost)) +

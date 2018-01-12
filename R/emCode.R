@@ -29,14 +29,28 @@ findLaplaceRateMLE <- function(residuals, weights) {
 # A function for etimating t degrees of freedom -----
 #' @export
 findTdf <- function(residuals, weights) {
-  llim <- 0.1
+  llim <- 10^-3
   ulim <- 200
-  max <- optimize(f = function(r) weighted.mean(dt(residuals, r, TRUE), weights),
+  max <- optimize(f = function(r) weighted.mean(dt(residuals, r, log = TRUE), weights),
                   lower = llim, upper = ulim, maximum = TRUE)$maximum
   return(max)
 }
 
 
+# A function for estimating a quadratic variance function -----
+tAndNormLogLik <- function(coef, x, residuals, tdf) {
+  sds <- sqrt(log(sum(coef * c(1, abs(x), x^2))))
+  z <- residuals / sds
+  dens <- -sum(weights * dnorm(z) + (1 - weights) * dt(z, df = tdf))
+  print(c(dens, coef))
+  return(dens)
+}
 
+#' @export
+findVarFunction <- function(x, residuals, tdf, normalWeights) {
+  minimum <- optim(par = c(1, 0, 0), fn = tAndNormLogLik,
+                   x = x, residuals = residuals, tdf = tdf)
+  return(minimum$par)
+}
 
 
