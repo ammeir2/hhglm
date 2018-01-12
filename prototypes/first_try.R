@@ -26,7 +26,7 @@ iterations <- 1
 delta <- 10^-3
 for(m in 1:iterations) {
   # E Step ---------
-  estVar <- exp(predict(loessVar))
+  estVar <- exp(predict(lmvar))
   normDens <- dnorm(residuals, 0, sqrt(estVar), log = TRUE)
   tDens <- dt(residuals / sqrt(estVar), df = estTdf, log = TRUE)
   normPost <- 1 / (1 + exp(tDens + log(tProb) - normDens - log(normalProb)))
@@ -37,26 +37,29 @@ for(m in 1:iterations) {
   residuals <- lmfit$residuals
   # loessVar <- loess(log(residuals^2) ~ abs(x), weights = normPost)
   # estVar <- exp(predict(loessVar))
-  loessVar <- lm(log(residuals^2) ~ abs(x) + x^2, weights = normPost / (estVar + delta))
-  findVarFunction(x, residuals, estTdf, normPost)
-  estVar <- exp(predict(loessVar))
+  lmvar <- lm(log(residuals^2) ~ abs(x) + x^2, weights = normPost / (estVar + delta))
+  estVar <- exp(predict(lmvar))
   estTdf <- findTdf(residuals / sqrt(estVar), tPost)
   normalProb <- mean(normPost)
   laplaceProb <- 1 - normalProb
 }
 
 library(ggplot2)
+library(viridis)
 weights <- normPost / (estVar + delta)
 weights <- weights / sum(weights)
 resultDat <- data.frame(x = x, y = y,
                         residsq = residuals^2, estVar = estVar,
                         normPost = normPost, weights = weights)
 resultDat <- resultDat[order(resultDat$x), ]
-ggplot(resultDat) + geom_point(aes(x = x, y = y, col = normPost)) +
-  geom_abline(intercept = lmfit$coefficients[1], slope = lmfit$coefficients[2])
+ggplot(resultDat) + geom_point(aes(x = x, y = y, col = (normPost))) +
+  geom_abline(intercept = lmfit$coefficients[1], slope = lmfit$coefficients[2]) +
+  scale_color_viridis()
+
 
 ggplot(resultDat) + geom_point(aes(x = x, y = sqrt(residsq), col = normPost)) +
-  geom_line(aes(x = x, y = sqrt(estVar)))
+  geom_line(aes(x = x, y = sqrt(estVar))) +
+  scale_color_viridis()
 
 plot(1:length(x), cumsum(sort(resultDat$weights, decreasing = TRUE)))
 
