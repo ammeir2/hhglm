@@ -53,7 +53,7 @@ dataForPlot <- data.frame(x = dat$x, y = dat$y,
                           dataset = dat$dataset,
                           estVar = sqrt(exp(predict(emfit$varModel))),
                           estVarTrim = estVarTrim)
-dataForPlot$weights <- with(dataForPlot, (1 - posterior) / (estVar + 10^-3))
+dataForPlot$weights <- with(dataForPlot, (1 - posterior) / (estVar + 10^-4))
 dataForPlot$weights <- dataForPlot$weights / sum(dataForPlot$weights)
 dataForPlot$trimWeights <- trimWeights
 dataForPlot$trimWeights <- trimWeights / sum(trimWeights)
@@ -66,11 +66,10 @@ ggplot(dataForPlot) + geom_point(aes(x = x, y = y, col = weights)) +
   # geom_line(aes(x = x, y = yhatNaive), col = "orange") +
   facet_wrap(~ dataset, scales = "free") +
   scale_color_viridis() + theme_bw()
-  # xlim(-10, 10) +
-  # ylim(-15, 15)
 # ggsave(filename = "tex/emScatter.pdf", plot = last_plot(), units = "in",
 #        height = 3, width = 6)
 
+# Variance function plot ------
 ggplot(dataForPlot) + geom_line(aes(x = (x), y = estVar), col = "blue") +
   geom_point(aes(x = (x), y = sqrt(estVarTrim)), col = "red") +
   geom_point(aes(x = x, y = sqrt(residuals^2))) + ylim(0, 40) + theme_bw() +
@@ -78,9 +77,8 @@ ggplot(dataForPlot) + geom_line(aes(x = (x), y = estVar), col = "blue") +
 # ggsave(filename = "tex/varFunc.pdf", plot = last_plot(), units = "in",
 #        height = 2.5, width = 5)
 
+# Relative weights -----
 plot(cumsum(sort(dataForPlot$weights, decreasing = TRUE)))
-
-lm(y ~ dataset:x - 1, data = dat)
 
 # Bootstrapping Estimate Variability ----------
 # Some variables to help with saving results
@@ -90,7 +88,7 @@ method <- c("em", "trim", "quantile", "naive") %>%
   factor(., levels = .) %>%
   rep(5) %>% sort()
 
-# doing bootstrap
+# Bootstrapping
 set.seed(1)
 bootReps <- 100
 sepdat <- split(dat, dat$dataset)
@@ -213,12 +211,14 @@ cvResults$method[cvResults$method == "em"] <- "mixture"
 cvTable <- group_by(cvResults, method) %>%
   summarize(mRMSE = mean(rmse), rmseSD = sd(rmse)) %>%
   as.data.frame()
+
+# Preparing latex table
 rownames(cvTable) <- c("Hybrid", "Mixture", "Naive", "Quantile", "IRWTLS")
 cvTable$method <- NULL
 names(cvTable) <- c("RMSE", "SD")
 xtable(t(cvTable), caption = "Mean RMSE in repeated cross-validation.")
 
-# Relative to Naive
+# Errors Relative to Naive
 relative <- subset(cvResults, method == "naive") %>%
   rename(naiveRMSE = rmse) %>% select(iter, fold, naiveRMSE) %>%
   merge(subset(cvResults, method != "naive"), all.x = TRUE, all.y = TRUE) %>%
