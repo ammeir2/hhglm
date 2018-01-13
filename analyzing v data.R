@@ -40,6 +40,16 @@ quantfit <- rq(y ~ dataset/x - 1, data = dat)
 # naive fit
 naivefit <- lm(y ~ dataset/x - 1, data = dat)
 
+# Coefficient estimates -----
+emcoef <- coef(emfit$regModel) %>% matrix(ncol = 2) %>% t()
+trimcoef <- sapply(trimfit$regModel, function(x) coef(x))
+hybridcoef <- (trimcoef + emcoef) / 2
+outtable <- t(hybridcoef)
+colnames(outtable) <- c("b", "a")
+outtable <- data.frame(outtable)
+rownames(outtable) <- paste("data_1_", 1:5, ".csv", sep = "")
+write.csv(outtable, "tex/vol_results.csv")
+
 # Processing results ---------
 trimFitted <- sapply(trimfit$regModel, function(x) x$fitted.values) %>% unlist()
 estVarTrim <- trimfit$varEst

@@ -1,10 +1,10 @@
 Package: hhglm
-Title: What the Package Does (one line, title case)
-Version: 0.0.0.9000
-Authors@R: person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
+Title: Heavy Tailed Heteroskedastic Linear Modeling
+Version: 1.0
+Authors@R: person("Amit", "Meir", email = "amitmeir@uw.edu", role = c("aut", "cre"))
+Description: Estimation of linear models with outliers and heavy tailed noise distribution.
 Depends: R (>= 3.4.2)
-License: What license is it under?
+License: GPL-3
 Encoding: UTF-8
 LazyData: true
 Imports: robustbase,
