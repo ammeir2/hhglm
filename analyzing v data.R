@@ -1,6 +1,8 @@
 library(magrittr)
 library(ggplot2)
-library(progressBar)
+library(progress)
+library(quantreg)
+library(viridis)
 
 # Reading data ------
 datasets <- vector(5, mode = "list")
@@ -41,6 +43,8 @@ naivefit <- lm(y ~ dataset/x - 1, data = dat)
 # Processing results ---------
 trimFitted <- sapply(trimfit$regModel, function(x) x$fitted.values) %>% unlist()
 estVarTrim <- trimfit$varEst
+trimWeights <- sapply(trimfit$regModel, function(x) 1:length(x$residuals) %in% x$best) %>% unlist()
+trimWeights <- trimWeights / (estVarTrim + 10^-4)
 
 # Plotting results ------------
 dataForPlot <- data.frame(x = dat$x, y = dat$y,
@@ -59,11 +63,11 @@ dataForPlot$trimWeights <- trimWeights
 dataForPlot$trimWeights <- trimWeights / sum(trimWeights)
 dataForPlot <- dataForPlot[order(abs(dataForPlot$x)), ]
 
-ggplot(dataForPlot) + geom_point(aes(x = x, y = y, col = weights)) +
+ggplot(dataForPlot) + geom_point(aes(x = x, y = y, col = trimWeights)) +
   geom_line(aes(x = x, y = yhat), col = "blue") +
-  # geom_line(aes(x = x, y = yhattrim), col = "red") +
-  # geom_line(aes(x = x, y = yhatQuant), col = "green") +
-  # geom_line(aes(x = x, y = yhatNaive), col = "orange") +
+  geom_line(aes(x = x, y = yhattrim), col = "red") +
+  geom_line(aes(x = x, y = yhatQuant), col = "green") +
+  geom_line(aes(x = x, y = yhatNaive), col = "orange") +
   facet_wrap(~ dataset, scales = "free") +
   scale_color_viridis() + theme_bw()
 # ggsave(filename = "tex/emScatter.pdf", plot = last_plot(), units = "in",
@@ -138,7 +142,7 @@ ggplot(bresults) + geom_boxplot(aes(x = coef, y = estimate, col = method)) +
 # Evaluating prediction error -----------
 set.seed(1)
 ndatasets <- length(unique(dat$dataset))
-nCVs <- 50
+nCVs <- 20
 nFolds <- 5
 cvResults <- vector(nCVs, mode = "list")
 pb <- txtProgressBar(min = 0, max = nCVs * nFolds, style = 3)
