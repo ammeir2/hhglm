@@ -67,12 +67,14 @@ dataForPlot <- data.frame(x = dat$x, y = dat$y,
                           dataset = dat$dataset,
                           estVar = sqrt(exp(predict(emfit$varModel))),
                           estVarTrim = estVarTrim)
+# Adding weights to graph
 dataForPlot$weights <- with(dataForPlot, (1 - posterior) / (estVar + 10^-4))
 dataForPlot$weights <- dataForPlot$weights / sum(dataForPlot$weights)
 dataForPlot$trimWeights <- trimWeights
 dataForPlot$trimWeights <- trimWeights / sum(trimWeights)
 dataForPlot <- dataForPlot[order(abs(dataForPlot$x)), ]
 
+# Plotting scatterplot
 ggplot(dataForPlot) + geom_point(aes(x = x, y = y, col = trimWeights)) +
   geom_line(aes(x = x, y = yhat), col = "blue") +
   geom_line(aes(x = x, y = yhattrim), col = "red") +
@@ -152,8 +154,8 @@ ggplot(bresults) + geom_boxplot(aes(x = coef, y = estimate, col = method)) +
 # Evaluating prediction error -----------
 set.seed(1)
 ndatasets <- length(unique(dat$dataset))
-nCVs <- 20
-nFolds <- 5
+nCVs <- 20 # number of repeated CVs
+nFolds <- 5 # number of folds in each repetition
 cvResults <- vector(nCVs, mode = "list")
 pb <- txtProgressBar(min = 0, max = nCVs * nFolds, style = 3)
 pbInd <- 0
