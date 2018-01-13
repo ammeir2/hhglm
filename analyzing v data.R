@@ -1,4 +1,6 @@
 library(magrittr)
+library(ggplot2)
+library(progressBar)
 
 # Reading data ------
 datasets <- vector(5, mode = "list")
@@ -9,6 +11,14 @@ for(i in 1:5) {
 }
 dat <- do.call("rbind", datasets)
 
+# Plotting Data -----------
+ggplot(dat) +
+  geom_point(aes(x = x, y = y)) +
+  facet_wrap(~ dataset, scales = "free") +
+  theme_bw()
+# ggsave(filename = "tex/firstScatter.pdf", plot = last_plot(), units = "in",
+#        height = 3, width = 6)
+
 # Fitting Models -----
 # mixture model
 emfit <- hhlm(formula = y ~ dataset/x - 1,
@@ -17,7 +27,7 @@ emfit <- hhlm(formula = y ~ dataset/x - 1,
             iterations = 100, delta = 10^-4)
 
 # iteratively reweighted least squares
-trimfit <- irtwls(y ~ x, data = dat,
+trimfit <- irwtls(y ~ x, data = dat,
                   varVariable = abs(dat$x),
                   dataset_identifier = dat$dataset,
                   iterations = 200, delta = 10^-4)
@@ -51,17 +61,23 @@ dataForPlot <- dataForPlot[order(abs(dataForPlot$x)), ]
 
 ggplot(dataForPlot) + geom_point(aes(x = x, y = y, col = weights)) +
   geom_line(aes(x = x, y = yhat), col = "blue") +
-  geom_line(aes(x = x, y = yhattrim), col = "red") +
-  geom_line(aes(x = x, y = yhatQuant), col = "green") +
-  geom_line(aes(x = x, y = yhatNaive), col = "orange") +
+  # geom_line(aes(x = x, y = yhattrim), col = "red") +
+  # geom_line(aes(x = x, y = yhatQuant), col = "green") +
+  # geom_line(aes(x = x, y = yhatNaive), col = "orange") +
   facet_wrap(~ dataset, scales = "free") +
   scale_color_viridis() + theme_bw()
   # xlim(-10, 10) +
   # ylim(-15, 15)
+# ggsave(filename = "tex/emScatter.pdf", plot = last_plot(), units = "in",
+#        height = 3, width = 6)
 
 ggplot(dataForPlot) + geom_line(aes(x = (x), y = estVar), col = "blue") +
-  geom_line(aes(x = (x), y = sqrt(estVarTrim)), col = "red") +
-  geom_point(aes(x = x, y = sqrt(residuals^2))) + ylim(0, 40)
+  geom_point(aes(x = (x), y = sqrt(estVarTrim)), col = "red") +
+  geom_point(aes(x = x, y = sqrt(residuals^2))) + ylim(0, 40) + theme_bw() +
+  ylab("squared-residuals") + xlab("x")
+# ggsave(filename = "tex/varFunc.pdf", plot = last_plot(), units = "in",
+#        height = 2.5, width = 5)
+
 plot(cumsum(sort(dataForPlot$weights, decreasing = TRUE)))
 
 lm(y ~ dataset:x - 1, data = dat)
@@ -75,7 +91,7 @@ method <- c("em", "trim", "quantile", "naive") %>%
   rep(5) %>% sort()
 
 # doing bootstrap
-library(progressBar)
+set.seed(1)
 bootReps <- 100
 sepdat <- split(dat, dat$dataset)
 pb <- txtProgressBar(min = 0, max = bootReps, style = 3)
@@ -88,7 +104,7 @@ for(m in 1:bootReps) {
                 varFormula = ~ abs(x),
                 data = bootDat,
                 iterations = 100, delta = 10^-4)
-  trimfit <- irtwls(y ~ x, data = bootDat,
+  trimfit <- irwtls(y ~ x, data = bootDat,
                     varVariable = abs(bootDat$x),
                     dataset_identifier = bootDat$dataset,
                     iterations = 200, delta = 10^-4)
@@ -113,12 +129,18 @@ library(reshape2)
 bresults <- do.call("rbind", bootResults)
 bresults <- melt(bresults, id = c("rep", "dataset", "method"))
 names(bresults)[4:5] <- c("coef", "estimate")
+bresults$method <- as.character(bresults$method)
+bresults$method[bresults$method == "em"] <- "mixture"
 ggplot(bresults) + geom_boxplot(aes(x = coef, y = estimate, col = method)) +
-  facet_wrap(~ dataset, labeller = "label_both", scales = "free")
+  facet_wrap(~ dataset, labeller = "label_both", scales = "free") +
+  theme_bw()
+# ggsave(filename = "tex/estBox.pdf", plot = last_plot(), units = "in",
+#        height = 3, width = 6)
 
 # Evaluating prediction error -----------
+set.seed(1)
 ndatasets <- length(unique(dat$dataset))
-nCVs <- 20
+nCVs <- 50
 nFolds <- 5
 cvResults <- vector(nCVs, mode = "list")
 pb <- txtProgressBar(min = 0, max = nCVs * nFolds, style = 3)
@@ -140,11 +162,13 @@ for(m in 1:nCVs) {
                   varFormula = ~ abs(x),
                   data = train,
                   iterations = 100, delta = 10^-4)
+
     testX <- model.matrix(y ~ dataset/x - 1, data = test)
-    emRMSE <- sqrt(mean((testX %*% coef(emfit$regModel) - test$y)^2))
+    empred <- as.numeric((testX %*% coef(emfit$regModel)))
+    emRMSE <- sqrt(mean((empred - test$y)^2))
 
     # trim
-    trimfit <- irtwls(y ~ x, data = train,
+    trimfit <- irwtls(y ~ x, data = train,
                       varVariable = abs(train$x),
                       dataset_identifier = train$dataset,
                       iterations = 200, delta = 10^-4)
@@ -157,6 +181,10 @@ for(m in 1:nCVs) {
     trimpred <- unlist(trimpred)
     trimRMSE <- sqrt(mean((trimpred - test$y)^2))
 
+    # mean prediction
+    hybridPred <- (trimpred + empred) / 2
+    hybridRMSE <- sqrt(mean((hybridPred - test$y)^2))
+
     # quantile
     quantfit <- rq(y ~ dataset/x - 1, data = train)
     quantRMSE <- sqrt(mean((predict(quantfit, newdata = test) - test$y)^2))
@@ -166,9 +194,10 @@ for(m in 1:nCVs) {
     naiveRMSE <- sqrt(mean((predict(naivefit, newdata = test) - test$y)^2))
 
     # fold result
-    foldresults[[f]] <- data.frame(fold = f,
-                                   method = c("em", "trim", "quantile", "naive"),
-                                   rmse = c(emRMSE, trimRMSE, quantRMSE, naiveRMSE))
+    foldresults[[f]] <- data.frame(iter = m,
+                                   fold = f,
+                                   method = c("em", "trim", "quantile", "naive", "hybrid"),
+                                   rmse = c(emRMSE, trimRMSE, quantRMSE, naiveRMSE, hybridRMSE))
   }
   cvResults[[m]] <- do.call("rbind", foldresults)
 }
@@ -178,9 +207,25 @@ cvResults <- do.call("rbind", cvResults)
 # mean RMSE and SDs
 library(dplyr)
 library(xtable)
-group_by(cvResults, method) %>%
+# Absolute RMSE
+cvResults$method <- as.character(cvResults$method)
+cvResults$method[cvResults$method == "em"] <- "mixture"
+cvTable <- group_by(cvResults, method) %>%
   summarize(mRMSE = mean(rmse), rmseSD = sd(rmse)) %>%
   as.data.frame()
+rownames(cvTable) <- c("Hybrid", "Mixture", "Naive", "Quantile", "IRWTLS")
+cvTable$method <- NULL
+names(cvTable) <- c("RMSE", "SD")
+xtable(t(cvTable), caption = "Mean RMSE in repeated cross-validation.")
+
+# Relative to Naive
+relative <- subset(cvResults, method == "naive") %>%
+  rename(naiveRMSE = rmse) %>% select(iter, fold, naiveRMSE) %>%
+  merge(subset(cvResults, method != "naive"), all.x = TRUE, all.y = TRUE) %>%
+  mutate(relError = log(rmse / naiveRMSE)) %>% group_by(method) %>%
+  summarize(relRMSE = mean(relError), rmseSD = sd(relError)) %>%
+  as.data.frame()
+relative
 
 
 
